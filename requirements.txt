@@ -1,3 +1,4 @@
-streamlit
-streamlit-mic-recorder
-google-generativeai
+uvicorn
+fastapi
+websockets
+google-genai

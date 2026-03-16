@@ -10,5 +10,4 @@ COPY . .
 
 EXPOSE 8080
 
-# Streamlit 전용 실행 설정
-CMD ["streamlit", "run", "app.py", "--server.port=8080", "--server.address=0.0.0.0"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Communication Copilot Live</title>
+    <style>
+        body { font-family: sans-serif; padding: 50px; background: #f4f4f9; }
+        h1 { text-align: center; }
+        p { text-align: center; }
+        #feedback { border: 1px solid #ccc; padding: 20px; height: 300px; overflow-y: auto; background: white; margin-top: 20px; text-align: left; }
+        #feedback p { text-align: left; margin: 0 0 12px 0; }
+        button { padding: 10px 28px; font-size: 15px; cursor: pointer; border-radius: 8px; border: 1px solid #ccc; background: #007bff; color: white; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        select { font-size: 14px; }
+        .row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .row label-text { font-size: 14px; color: #666; min-width: 130px; }
+        /* 토글 */
+        .toggle { position: relative; display: inline-block; width: 40px; height: 22px; cursor: pointer; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; inset: 0; background: #ccc; border-radius: 22px; transition: background 0.2s; }
+        .toggle-slider:before { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: white; border-radius: 50%; transition: transform 0.2s; }
+        .toggle input:checked + .toggle-slider { background: #007bff; }
+        .toggle input:checked + .toggle-slider:before { transform: translateX(18px); }
+
+        
+    </style>
+</head>
+<body>
+    <h1>🎙️ AI Communication Copilot: Live Coach</h1>
+    <p>Elevate your professional presence. Record your speech during meetings
+        to receive instant feedback on clarity, tone, and professionalism.</p>
+
+    <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+
+        <!-- 1줄: 언어 선택 -->
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 14px; color: #666; min-width: 130px;">Feedback language</span>
+            <select id="langSelect">
+                <option value="en">🇺🇸 English</option>
+                <option value="ko">🇰🇷 한국어</option>
+                <option value="ja">🇯🇵 日本語</option>
+                <option value="zh">🇨🇳 中文</option>
+                <option value="es">🇪🇸 Español</option>
+            </select>
+        </div>
+    
+        <!-- 2줄: 음성 피드백 토글 -->
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 14px; color: #666; min-width: 130px;">Voice feedback</span>
+            <label class="toggle">
+                <input type="checkbox" id="audioToggle">
+                <span class="toggle-slider"></span>
+            </label>
+            <span id="toggleLabel" style="font-size: 13px; color: #666;">Off</span>
+        </div>
+    
+        <!-- 3줄: 버튼 -->
+        <div style="display: flex; gap: 10px;">
+            <button id="startBtn">Start</button>
+            <button id="stopBtn" disabled>Stop</button>
+        </div>
+    
+    </div>
+
+    <div id="feedback">
+        <p><i>Real-time feedback will appear here...</i></p>
+    </div>
+
+    <script>
+        let ws, audioContext, processor, source, stream;
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const langSelect = document.getElementById('langSelect');
+        const audioToggle = document.getElementById('audioToggle');
+        const feedbackDiv = document.getElementById('feedback');
+
+        // ✅ 오디오 재생 함수 (PCM 24kHz → Web Audio API)
+        async function playAudioFeedback(base64data) {
+            const binary = atob(base64data);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+            // Gemini 오디오 출력은 PCM 24kHz
+            const sampleRate = 24000;
+            const samples = new Int16Array(bytes.buffer);
+            const float32 = new Float32Array(samples.length);
+            for (let i = 0; i < samples.length; i++) float32[i] = samples[i] / 32768.0;
+
+            const playCtx = new AudioContext({ sampleRate });
+            const buffer = playCtx.createBuffer(1, float32.length, sampleRate);
+            buffer.copyToChannel(float32, 0);
+            const src = playCtx.createBufferSource();
+            src.buffer = buffer;
+            src.connect(playCtx.destination);
+            src.start();
+        }
+
+        startBtn.onclick = async () => {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const lang = langSelect.value;
+            const audio = audioToggle.checked ? 'true' : 'false';  // ✅ 토글 값 전달
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws?lang=${lang}&audio=${audio}`);
+            ws.binaryType = 'arraybuffer';
+
+            ws.onmessage = async (event) => {
+                const data = event.data;
+                if (data.startsWith('[FEEDBACK]')) {
+                    // 텍스트 피드백 표시
+                    const newText = document.createElement('p');
+                    newText.innerText = "💡 " + data.replace('[FEEDBACK] ', '');
+                    feedbackDiv.prepend(newText);
+                } else if (data.startsWith('[AUDIO]')) {
+                    // ✅ 오디오 피드백 재생
+                    const b64 = data.replace('[AUDIO] ', '');
+                    await playAudioFeedback(b64);
+                }
+            };
+
+            ws.onopen = async () => {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new AudioContext({ sampleRate: 16000 });
+                console.log("실제 sampleRate:", audioContext.sampleRate);
+                source = audioContext.createMediaStreamSource(stream);
+                processor = audioContext.createScriptProcessor(512, 1, 1);
+                processor.onaudioprocess = (e) => {
+                    const float32 = e.inputBuffer.getChannelData(0);
+                    const pcm16 = new Int16Array(float32.length);
+                    for (let i = 0; i < float32.length; i++) {
+                        pcm16[i] = Math.max(-1, Math.min(1, float32[i])) * 32767;
+                    }
+                    if (ws.readyState === WebSocket.OPEN) ws.send(pcm16.buffer);
+                };
+                source.connect(processor);
+                processor.connect(audioContext.destination);
+                langSelect.disabled = true;
+                audioToggle.disabled = true;  // ✅ 녹음 중 토글 비활성화
+            };
+
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+        };
+
+        stopBtn.onclick = () => {
+            processor?.disconnect();
+            source?.disconnect();
+            stream?.getTracks().forEach(t => t.stop());
+            audioContext?.close();
+            ws?.close();
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            langSelect.disabled = false;
+            audioToggle.disabled = false;  // ✅ 토글 다시 활성화
+        };
+
+        document.getElementById('audioToggle').addEventListener('change', (e) => {
+            document.getElementById('toggleLabel').textContent = e.target.checked ? 'On' : 'Off';
+        });
+    </script>
+</body>
+</html>
