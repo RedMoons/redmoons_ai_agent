@@ -8,6 +8,17 @@ The Communication Copilot AI is a real-time assistive tool designed to enhance p
 * Multilingual Coaching: Users can select their preferred feedback language (English, Korean, Japanese, etc.) via a toggle UI.
 * Actionable Feedback & TTS: Provides a structured critique (Summary, Tone, Tips) and offers optional verbal feedback using high-quality AI voices.
 
+## How to deploy
+```bash
+gcloud run deploy communication-copilot-ai \
+  --source . \
+  --region asia-northeast1 \
+  --allow-unauthenticated \
+  --set-secrets="GEMINI_API_KEY=xx"
+  --timeout 3600 \
+  --session-affinity
+```
+
 ## How to test
 1. access https://communication-copilot-ai-279751294404.asia-northeast1.run.app
 2. select 'langauge' and 'voice feedback'
