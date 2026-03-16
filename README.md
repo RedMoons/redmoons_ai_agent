@@ -1,7 +1,6 @@
-
-
-
 # AI Communication Copilot
+https://communication-copilot-ai-279751294404.asia-northeast1.run.app
+
 ## Summary of Features and Functionality
 The Communication Copilot AI is a real-time assistive tool designed to enhance professional communication during workplace meetings.
 * Real-time Audio Transcription: Captures live audio from the user's microphone, converts it to 16kHz PCM, and generates near-instant text transcriptions.
